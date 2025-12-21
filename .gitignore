@@ -1,0 +1,19 @@
+# Models (download separately)
+models/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Temp
+tmp/
+*.log

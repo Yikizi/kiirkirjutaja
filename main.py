@@ -1,13 +1,14 @@
 import sys
 import argparse
 import logging
+import asyncio
+
 message_format = "%(asctime)s - %(levelname)s - %(message)s"
 logging.basicConfig(format=message_format, stream=sys.stderr, level=logging.INFO)
 
 import time
 import argparse
 import re
-import ray
 import torch
 import sherpa_onnx
 
@@ -15,33 +16,17 @@ import sherpa_onnx
 from pytorch_lightning.utilities import argparse_utils
 setattr(argparse_utils, "_gpus_arg_default", lambda x: 0)
 
-from vad import SpeechSegmentGenerator
-from turn import TurnGenerator
-from asr import TurnDecoder
+from asr import TurnDecoder, transcribe_audio
 from lid import LanguageFilter
 from online_scd.model import SCDModel
-#import vosk
-#from unk_decoder import UnkDecoder
-#from compound import CompoundReconstructor
-#from words2numbers import Words2Numbers
-#from punctuate import Punctuate
 from confidence import confidence_filter
 from presenters import *
+from vad import SpeechSegmentGenerator
+from turn import TurnGenerator
 import utils
 import gc
-import tracemalloc
-#date_strftime_format = "%y-%b-%d %H:%M:%S"
+import tracemalloc 
 
-
-ray.init(num_cpus=4) 
-
-#RemotePunctuate = ray.remote(Punctuate)
-#RemoteWords2Numbers = ray.remote(Words2Numbers)
-
-#unk_decoder = UnkDecoder()
-#compound_reconstructor = CompoundReconstructor()
-#remote_words2numbers = RemoteWords2Numbers.remote()
-#remote_punctuate = RemotePunctuate.remote("models/punctuator/checkpoints/best.ckpt", "models/punctuator/tokenizer.json")
 
 
 def process_result(result):
@@ -81,21 +66,7 @@ def main(args):
         #presenter = TerminalPresenter()
     
     scd_model = SCDModel.load_from_checkpoint("models/online-speaker-change-detector/checkpoints/epoch=102.ckpt")
-    sherpa_model = sherpa_onnx.OnlineRecognizer(
-            tokens="models/sherpa/tokens.txt",
-            encoder="models/sherpa/encoder.onnx",
-            decoder="models/sherpa/decoder.onnx",
-            joiner="models/sherpa/joiner.onnx",
-            num_threads=2,
-            sample_rate=16000,
-            feature_dim=80,
-            enable_endpoint_detection=True,
-            rule1_min_trailing_silence=5.0,
-            rule2_min_trailing_silence=2.0,
-            rule3_min_utterance_length=300,  
-            decoding_method="modified_beam_search",
-            max_feature_vectors=1000,  # 10 seconds
-        )
+    sherpa_model = create_sherpa_model()
 
 
     speech_segment_generator = SpeechSegmentGenerator(args.input_file)
@@ -127,19 +98,79 @@ def main(args):
 
     main_loop()        
 
-if __name__ == '__main__':
-    
+def create_sherpa_model():
+    """Create and return sherpa-onnx recognizer."""
+    return sherpa_onnx.OnlineRecognizer(
+        tokens="models/sherpa/tokens.txt",
+        encoder="models/sherpa/encoder.onnx",
+        decoder="models/sherpa/decoder.onnx",
+        joiner="models/sherpa/joiner.onnx",
+        num_threads=2,
+        sample_rate=16000,
+        feature_dim=80,
+        enable_endpoint_detection=True,
+        rule1_min_trailing_silence=5.0,
+        rule2_min_trailing_silence=2.0,
+        rule3_min_utterance_length=300,
+        decoding_method="modified_beam_search",
+        max_feature_vectors=1000,
+    )
 
-    parser = argparse.ArgumentParser(add_help=False)
+
+def wyoming_main(args):
+    """Run Wyoming protocol server for Home Assistant integration."""
+    from functools import partial
+    from wyoming_handler import run_wyoming_server
+
+    logging.info("Starting kiirkirjutaja in Wyoming server mode")
+    logging.info(f"Loading sherpa model...")
+
+    sherpa_model = create_sherpa_model()
+
+    logging.info(f"Model loaded. Starting server on {args.wyoming_uri}")
+
+    # Create transcription function with model bound
+    def transcribe_func(audio_bytes: bytes) -> str:
+        return transcribe_audio(sherpa_model, audio_bytes)
+
+    # Run async server
+    asyncio.run(run_wyoming_server(args.wyoming_uri, transcribe_func))
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(
+        description="Kiirkirjutaja - Estonian real-time speech recognition"
+    )
+
+    # Wyoming mode (Home Assistant)
+    parser.add_argument(
+        '--wyoming-uri',
+        type=str,
+        help="Wyoming server URI, e.g., tcp://0.0.0.0:10300"
+    )
+
+    # Legacy mode arguments
     parser.add_argument('--youtube-caption-url', type=str)
     parser.add_argument('--fab-speechinterface-url', type=str)
     parser.add_argument('--fab-bcast-url', type=str)
     parser.add_argument('--zoom-caption-url', type=str)
     parser.add_argument('--word-output-file', type=argparse.FileType('w'), default=sys.stdout)
-    parser.add_argument('--word-output-delay', default=0.0, type=float, help="Words are not outputted before that many seconds have passed since their actual start")
-    parser.add_argument('input_file')
+    parser.add_argument('--word-output-delay', default=0.0, type=float,
+                        help="Words are not outputted before that many seconds have passed since their actual start")
+    parser.add_argument('input_file', nargs='?', default=None,
+                        help="Input audio file or '-' for stdin")
 
     args = parser.parse_args()
 
-    main(args)
+    # Choose mode based on arguments
+    if args.wyoming_uri:
+        wyoming_main(args)
+    elif args.input_file:
+        # Legacy file/stdin mode - needs ray
+        import ray
+        ray.init(num_cpus=4)
+        main(args)
+    else:
+        parser.print_help()
+        sys.exit(1)
     

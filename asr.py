@@ -6,6 +6,53 @@ import torchaudio
 import json
 from queue import Queue
 import threading
+import numpy as np
+import logging
+
+_LOGGER = logging.getLogger(__name__)
+
+
+def transcribe_audio(recognizer, audio_bytes: bytes, sample_rate: int = 16000) -> str:
+    """
+    Transcribe audio bytes using sherpa-onnx recognizer.
+
+    Args:
+        recognizer: sherpa_onnx.OnlineRecognizer instance
+        audio_bytes: Raw PCM audio (16-bit signed, mono)
+        sample_rate: Sample rate (default 16000)
+
+    Returns:
+        Transcribed text string
+    """
+    # Convert bytes to numpy array (16-bit signed int)
+    audio_array = np.frombuffer(audio_bytes, dtype=np.int16)
+
+    # Normalize to float32 [-1, 1]
+    audio_float = audio_array.astype(np.float32) / np.iinfo(np.int16).max
+
+    _LOGGER.debug(f"Transcribing {len(audio_float)} samples ({len(audio_float)/sample_rate:.2f}s)")
+
+    # Create stream and feed audio
+    stream = recognizer.create_stream()
+    stream.accept_waveform(sample_rate, audio_float)
+
+    # Add tail padding for better final recognition
+    tail_padding = np.random.rand(int(sample_rate * 0.3)).astype(np.float32) * 0.01
+    stream.accept_waveform(sample_rate, tail_padding)
+
+    # Signal end of audio
+    stream.input_finished()
+
+    # Decode
+    while recognizer.is_ready(stream):
+        recognizer.decode_stream(stream)
+
+    # Get result
+    text = recognizer.get_result(stream)
+    recognizer.reset(stream)
+
+    return text.strip()
+
 
 def text2result(text):
     words = text.split()

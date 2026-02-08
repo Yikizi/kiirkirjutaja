@@ -1,23 +1,19 @@
-FROM python:3.9-slim-buster
+FROM python:3.11-slim-bookworm
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt /tmp/requirements.txt
-RUN pip install -r /tmp/requirements.txt 
-
-RUN apt-get update && apt-get install  -y --no-install-recommends git ffmpeg
-
-COPY models /opt/models
-
-RUN echo '2022-01-31_16:24' >/dev/null
-
-RUN git clone https://github.com/alumae/online_speaker_change_detector.git /opt/online-speaker-change-detector
-
-RUN mkdir /opt/kiirkirjutaja \
-    && cd /opt/kiirkirjutaja && ln -s ../models
-    
-COPY *.py /opt/kiirkirjutaja/
-
-ENV PYTHONPATH="/opt/online-speaker-change-detector"
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 WORKDIR /opt/kiirkirjutaja
 
-CMD ["/bin/bash"] 
+COPY models/sherpa-int8 /opt/kiirkirjutaja/models/sherpa-int8
+COPY main.py /opt/kiirkirjutaja/
+COPY asr.py /opt/kiirkirjutaja/
+COPY wyoming_handler.py /opt/kiirkirjutaja/
+
+EXPOSE 10300
+
+CMD ["python", "main.py", "--wyoming-uri", "tcp://0.0.0.0:10300"]

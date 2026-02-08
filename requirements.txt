@@ -1,31 +1,3 @@
-# PyTorch (CPU)
---extra-index-url https://download.pytorch.org/whl/cpu
-torch==1.13.1+cpu
-torchvision==0.14.1+cpu
-torchaudio==0.13.1
-
-# ML/Audio
-pytorch-lightning==1.2.5
-torchmetrics==0.2.0
+numpy
 sherpa-onnx
-onnx
-librosa==0.8.0
-audiomentations
-scipy
-
-# Ray
-ray[default]
-
-# NLP
-tokenizers
-pytorch-nlp
-
-# Utils
-py-term
-matplotlib
-lxml
-pytest
-event-scheduler
-
-# Wyoming protocol (Home Assistant voice)
 wyoming>=1.5.0

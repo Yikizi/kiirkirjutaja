@@ -164,23 +164,23 @@ def get_wyoming_info() -> Info:
     return Info(
         asr=[
             AsrProgram(
-                name="kiirkirjutaja",
+                name="kiirkirjutaja-local-int8",
                 attribution=Attribution(
                     name="Tanel Alumae / TalTech",
                     url="https://github.com/alumae/kiirkirjutaja"
                 ),
                 installed=True,
-                description="Estonian real-time speech recognition",
-                version="1.0.0",
+                description="Estonian real-time speech recognition (INT8, local)",
+                version="1.0.0-int8",
                 models=[
                     AsrModel(
-                        name="kiirkirjutaja",
+                        name="streaming-zipformer-int8",
                         attribution=Attribution(
                             name="TalTech",
-                            url="https://github.com/alumae/kiirkirjutaja"
+                            url="https://huggingface.co/TalTechNLP/streaming-zipformer.et-en"
                         ),
                         installed=True,
-                        description="Estonian streaming ASR model",
+                        description="Estonian streaming ASR model (INT8 quantized)",
                         version="1.0.0",
                         languages=["et"],
                     )

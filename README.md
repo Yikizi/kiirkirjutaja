@@ -23,6 +23,18 @@ docker run --rm -p 10300:10300 kiirkirjutaja-int8
 
 The server listens on `tcp://0.0.0.0:10300`.
 
+Model files are downloaded automatically at build time from:
+
+- `https://huggingface.co/TalTechNLP/streaming-zipformer.et-en`
+
+Optional custom model source:
+
+```bash
+docker build \
+  --build-arg MODEL_BASE_URL="https://your-host/path" \
+  -t kiirkirjutaja-int8 .
+```
+
 ## Home Assistant
 
 Add Wyoming integration with:
